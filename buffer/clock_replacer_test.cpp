@@ -59,7 +59,7 @@ TEST(ClockReplacerTest, SampleTest) {
   EXPECT_EQ(4, value);
 }
 
-TEST(ClockReplacerTest, MyConcurrencyTest) {
+TEST(ClockReplacerTest, MyConcurrencyTest1) {
   int num_pages = 500;
   // frame_id范围为[0,num_pages);
 
@@ -70,18 +70,63 @@ TEST(ClockReplacerTest, MyConcurrencyTest) {
   int myExist=0;
   // 保护myExist的mtx
   std::mutex mtx;
-  for (auto i=0; i<num_pages; i++) {
+  std::vector<std::thread> vs (num_pages/2);
+  int vsi = 0;
+  int n1 = 100;
+  for (auto i=0; i<n1; i++) {
     if (i % 2 == 0) {
       EXPECT_EQ(myExist, clock_replacer.Size());
     } else {
-      std::thread t1([&](int x) {
+      vs[vsi++] = std::thread([&](int x) {
         std::lock_guard<std::mutex> g (mtx);
         clock_replacer.Unpin(x);
         myExist ++;
       }, i);
-      t1.detach();
+    }
+  }
+
+  for (unsigned i=0; i<vs.size(); i++) {
+    if (vs[i].joinable()) {
+      vs[i].join();
     }
   }
 
 }
+
+TEST(ClockReplacerTest, MyConcurrencyTest2) {
+  /* 无用，测不出来
+  int num_pages = 500;
+  // frame_id范围为[0,num_pages);
+
+  ClockReplacer clock_replacer(num_pages);
+
+  // invariable broken case 2: 在victim找到可迫害的frame后，在真正迫害这个frame之前，
+  // 这个frame可能被Pin了。
+  int n1 = 5000000;
+  frame_id_t f_id;
+  frame_id_t unpin_id = num_pages / 2;
+  std::mutex mtx;
+  for (auto i=0; i<n1; i++) {
+    clock_replacer.Unpin(unpin_id);
+    bool victim_start = false;
+    bool victim_end = false;
+    f_id = -1;
+    std::thread t1([&]{
+      victim_start = true;
+      clock_replacer.Victim(&f_id);
+      victim_end = true;
+    });
+    std::thread t2([&]{
+      while (!victim_start);
+      if (f_id != unpin_id) {
+        clock_replacer.Pin(unpin_id);
+        while (!victim_end);
+        EXPECT_EQ(f_id != unpin_id, true);
+      }
+    });
+    t1.join(); t2.join();
+  }
+   */
+}
+
 }  // namespace bustub
